@@ -1,0 +1,75 @@
+{
+  "name": "StealATime",
+  "syncbackRules": {
+    "ignoreTrees": ["Workspace/Terrain", "Workspace/Camera"],
+    "syncCurrentCamera": false,
+    "ignoreProperties": {
+      "BasePart": ["Color3uint8", "AttributesSerialize"],
+      "Model": ["AttributesSerialize"]
+    }
+  },
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "$className": "ReplicatedStorage",
+      "TimeSanctuary": {
+        "$path": "src/ReplicatedStorage",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "ServerScriptService": {
+      "$className": "ServerScriptService",
+      "TimeSanctuary": {
+        "$path": "src/ServerScriptService",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "StarterGui": {
+      "$className": "StarterGui",
+      "TimeSanctuary": {
+        "$path": "src/StarterGui",
+        "$ignoreUnknownInstances": true
+      }
+    },
+
+    "StarterPlayer": {
+      "$className": "StarterPlayer",
+      "StarterPlayerScripts": {
+        "$className": "StarterPlayerScripts",
+        "TimeSanctuary": {
+          "$path": "src/StarterPlayer/StarterPlayerScripts",
+          "$ignoreUnknownInstances": true
+        }
+      }
+    },
+
+    "Lighting": {
+      "$className": "Lighting",
+      "$properties": {
+        "Ambient": [0.35, 0.38, 0.45],
+        "OutdoorAmbient": [0.55, 0.58, 0.66],
+        "Brightness": 1.1,
+        "ClockTime": 14,
+        "GeographicLatitude": 0,
+        "TimeOfDay": "14:00:00",
+        "EnvironmentDiffuseScale": 0.75,
+        "EnvironmentSpecularScale": 0.15
+      }
+    },
+
+    "Workspace": {
+      "$className": "Workspace",
+      "$properties": {
+        "Gravity": 196.2,
+        "StreamingEnabled": true
+      },
+      "TimeSanctuary_World": {
+        "$path": "src/Workspace",
+        "$ignoreUnknownInstances": true
+      }
+    }
+  }
+}

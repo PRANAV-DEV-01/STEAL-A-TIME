@@ -6,6 +6,7 @@ local DEFAULT_LIMITS = {
 	purchase = { window = 60, max = 10 },
 	claim = { window = 60, max = 3 },
 	bank = { window = 60, max = 10 },
+	trade = { window = 60, max = 20 },
 }
 
 local buckets = {}

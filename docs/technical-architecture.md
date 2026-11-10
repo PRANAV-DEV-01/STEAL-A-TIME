@@ -6,96 +6,162 @@
    only server-side. Clients may *request* and *display*; they never decide.
 2. **No client trust.** All RemoteEvent/Function args are hostile input.
 3. **Single source of balance.** All tunables live in `Config/` modules.
-4. **Services own one job.** `src/ServerScriptService/.../services/` — one module
-   per concern, started once, no cross-service circular mess.
-5. **Controlled persistence.** Only `ProfileService` reads/writes player data.
+4. **Services own one job.** `services/` — one module per concern, started once,
+   in an explicit dependency order.
+5. **Controlled persistence.** Only `ProfileService` writes player data; gang and
+   leaderboard stores are owned by their own services.
 6. **Honest testing.** Nothing is "done" until it ran in Studio and logged it.
 
 ## Runtime layout
 
 ```
 ReplicatedStorage.TimeSanctuary
-├── Config/SharedConfig, GameConfig, BalanceConfig, ZoneConfig, ...
-├── Remotes            (RemoteEvents/RemoteFunctions definition + init)
-├── Validation         (server validation helpers)
-└── ProfileSchema      (profile default + migration + size limits)
+├── Config/GameConfig, BalanceConfig, ZoneConfig, EconomyConfig, SocialConfig
+├── Remotes             (creates RemotesFolder + all TS_* remotes on the server)
+├── Validation          (untrusted-input validation helpers)
+├── ProfileSchema       (default profile, schema v2, sanitise, BankCap, Snapshot)
+└── SharedLoader        (one require surface for the modules above)
 
 ServerScriptService.TimeSanctuary
-├── init.server.luau            Bootstrap: require services in dependency order
-└── services/
-    ├── ProfileService      → owns DataStore saves, save queue, session lock
-    ├── RateLimiter         → shared token-bucket per (player, action)
-    ├── ZoneService         → authoritative hub/zone membership from position
-    ├── TeleportService     → warp-pad requests (server-validated)
-    ├── TimeService         → authoritative active time, decay loop, delegations
-    ├── StealService        → steal validation, reward math, cooldowns
-    ├── TimeDeathService    → TIME'S UP pipeline, respawn, comeback, setback
-    ├── NpcTimeSourceService→ NPC time pillars & small caches
-    └── LeaderboardService  → server values, throttled/cached output
+├── init.server.luau     Bootstrap: require in one order, Start in another
+├── services/            21 one-job service modules
+│   ├── RateLimiter              sliding-window limiter + suspect escalation
+│   ├── ZoneService              position → zone, pad placement, tutorial hooks
+│   ├── NpcTimeSourceService     per-pillar pools, regen, take/refund
+│   ├── ProfileService           DataStore load/save, dirty queue, BindToClose flush
+│   ├── TimeService              active time, decay loop, protection, sync
+│   ├── TimeDeathService         TIME'S UP pipeline, setback, comeback, respawn
+│   ├── StealService             NPC + PvP validation, reward math, cooldowns
+│   ├── TeleportService          warp-pad requests (server-validated)
+│   ├── BankService              deposit/withdraw active ↔ banked
+│   ├── ShopService              upgrades, pets, bank-capacity tiers
+│   ├── DailyService             7-day rewards + streak
+│   ├── OfflineService           offline earnings accrual + claim
+│   ├── PrestigeService          5 tiers, resets, titles, steal bonus
+│   ├── LeaderboardService       two ordered stores + memory fallback
+│   ├── GangService              persisted gang registry + invite flow
+│   ├── TradeService             banked-time trade sessions
+│   ├── EventService             weekday rotation + NPC/PvP multipliers
+│   ├── TutorialService          6-step onboarding
+│   ├── CharacterService         speed, dash, stealth, auto-steal
+│   ├── AntiCheatService         out-of-bounds, speed correction, suspect kick
+│   └── SettingsService          persisted boolean toggles
+└── world/WorldBuilder.luau      procedural hub + zones + pads + pillars
 
 StarterPlayer.StarterPlayerScripts.TimeSanctuary
-├── init.client.luau   Bootstrap: build HUD, subscribe to remotes
-└── ui/
-    ├── TimerHud    top-center timer (color states, throttle)
-    ├── ActionBar   Steal / Dash / Interact buttons (mobile + keyboard)
-    ├── Feedback    floating texts, announcements, warnings
-    └── DeathOverlay TIME'S UP screen
+├── init.client.luau     Bootstrap: build UI, subscribe to every remote
+└── ui/                  view-only (login/display); no authoritative logic
+    ├── UIKit            palette + row/label/button/textbox builders
+    ├── TimerHud         top-centre timer (colour thresholds, throttled)
+    ├── ActionBar        steal targets + keyboard/touch buttons
+    ├── Feedback         floating text + announcement feed
+    ├── DeathOverlay     TIME'S UP screen
+    ├── Panels           all facility panels (bank/shop/daily/leaderboard/
+    │                    gang/trade/prestige/event/settings/tutorial)
+    ├── PadInteraction   44px+ on-screen pad prompt button
+    ├── DashButton       mobile-friendly dash trigger
+    └── TutorialHud      tutorial step banner
 ```
+
+### Bootstrap contract
+
+`init.server.luau` builds a single `ctx` and passes it to every service:
+
+| `ctx` field | Contents |
+|---|---|
+| `ctx.Config` | `Game`, `Balance`, `Zones`, `Economy`, `Social` |
+| `ctx.Remotes` | the `Remotes` module (`Remotes.Get(name)`) |
+| `ctx.Validation` | `Validation` helpers |
+| `ctx.ProfileSchema` | schema, sanitise, `BankCap`, `Snapshot` |
+| `ctx.Services` | map keyed by module file name, incl. `WorldBuilder` |
+| `ctx.State` | shared state (e.g. `processingDeath` locks) |
+| `ctx.services`, `ctx.state` | lowercase aliases kept for older services |
+
+Each service is required first, then `Start(ctx)` is pcall'd in dependency order.
+A failure is logged (`<Name> failed to start: …`) and does not abort boot; the
+final line is `[TimeSanctuary] bootstrap complete`. `BindToClose` flushes
+`ProfileService` and `GangService`.
+
+## Remote catalogue
+
+All remotes are created by `Remotes.luau` inside a folder named
+**`RemotesFolder`** (deliberately not `Remotes`, which is the module's own name).
+Requests are `UnreliableRemoteEvent` where loss is acceptable, `RemoteFunction`
+where the caller needs a reply, and results are `RemoteEvent`.
+
+| Kind | Remotes |
+|---|---|
+| Events | `TS_StealResult`, `TS_SyncTime`, `TS_Announcement`, `TS_Feedback`, `TS_VictimWarn`, `TS_TimeUp`, `TS_RespawnNotice`, `TS_SyncProfile`, `TS_CooldownSync`, `TS_BankUpdate`, `TS_DailyUpdate`, `TS_LeaderboardUpdate`, `TS_GangUpdate`, `TS_TradeUpdate`, `TS_EventUpdate`, `TS_TutorialUpdate`, `TS_AbilityState` |
+| Unreliable | `TS_StealRequest`, `TS_TeleportRequest`, `TS_BankDeposit`, `TS_BankWithdraw`, `TS_DashRequest`, `TS_StealthRequest` |
+| Functions | `TS_PurchaseRequest`, `TS_ClaimDaily`, `TS_ClaimOffline`, `TS_PrestigeRequest`, `TS_GangAction`, `TS_TradeAction`, `TS_SettingsAction`, `TS_LeaderboardRequest`, `TS_TutorialAction`, `TS_ProfileRequest` |
+
+Each RemoteFunction has exactly one `OnServerInvoke` owner.
+
+## Profile fan-out
+
+`ProfileService` loads a profile, then:
+1. calls `OnProfileReady(player)` on every service that defines it (bank, daily,
+   leaderboard, event, tutorial, character, gang …);
+2. calls `SyncAll(player)` to push the full snapshot.
+
+The client also fires `TS_ProfileRequest` on start. The server answers with the
+current snapshot, and re-sends after ~3s so a client that connected late still
+receives state. Profiles are only ever mutated via `ProfileService`.
 
 ## Decay loop (TimeService)
 
-- One server loop tick (e.g., 0.25s) or timestamp math. Per player:
-  - `activeTime -= dt * zoneDecayRate` when zone ≠ HUB and alive and not recently protected.
-  - All state in a memory table keyed by player.UserId. No client echo of time.
-- Sync: broadcast `SyncTime` (event) on change or throttle 0.5s to that player.
+- One server loop tick (`Config.Game.DecayTick`). For each player with a loaded
+  profile: `activeTime -= dt * zoneDecayRate` when the zone is not the hub, the
+  humanoid is alive, and the player is not protected.
+- State lives in a `userId → number` table; the client never echoes time back.
+- `TS_SyncTime` is throttled to the player. `TimeService.SetTime` /
+  `AwardTime` are the only mutation entry points for other services.
 
 ## Steal flow (authoritative)
 
-1. Client fires `TS_StealRequest(targetKey)` (NPC id or player UserId).
-2. Server checks (each fails with a reason code): player alive & not hub; target
-   exists & not hub; zone valid; distance ≤ range (server-calculated); cooldown
-   passed for that target; target has stealable pool; rate limit OK.
-3. Server computes reward:
-   `base = ZoneConfig.baseReward(z) · NPC/pet/upgrade multipliers · eventBonus`,
-   all capped by `BalanceConfig.maxStealReward` and remaining target pool.
-4. Apply transfer atomically (target pool -= r, player += r), set cooldowns,
-   log, save through ProfileService queue, fire `StealResult` + VFX feedback.
-5. PvP victim receives `VictimWarning` remote event.
+1. Client fires `TS_StealRequest(targetKey)` (NPC pillar id or player UserId).
+2. Server checks, each with a reason code: player alive and not in hub; target
+   exists and not in hub; distance ≤ zone range; per-target cooldown; pool has
+   time; hourly cap; rate limit.
+3. Server computes the reward from zone base, NPC/PvP caps, upgrade/pet/prestige
+   multipliers and event multipliers — never from client values.
+4. Transfer is applied atomically (pool −= r, player += r); pool time is refunded
+   if the hourly cap rejects the steal.
+5. Result → `TS_StealResult`; PvP victim → `TS_VictimWarn`; profile marked dirty.
 
 ## Death pipeline (TimeDeathService)
 
-Triggered only by TimeService when `activeTime <= 0`. Guards:
-- per-player `isProcessingDeath` lock; duplicate request discarded.
-- Suspend decay, cancel steal cooldown-only operations, respawn to hub.
-  Restore `startingTime`, grant comeback bonus (tied duration, e.g., +15s start,
-  5min no-loss period), apply setback to banked time (documented), protect 30s.
-- Save via ProfileService queue; broadcast `TimeUp` + `RespawnNotice`.
+Triggered by `TimeService` when `activeTime <= 0`:
+- `ctx.State.processingDeath[userId]` lock; duplicate requests discarded.
+- Decay suspended, character respawned to the hub, `startingTime` restored,
+  comeback bonus applied inside its window, banked setback applied
+  (`DeathBankSetbackFraction`, reduced by Time Insurance, skipped by Second
+  Chance), then spawn protection for `RespawnProtectionSeconds`.
+- Saves via `ProfileService`, then broadcasts `TS_TimeUp` + `TS_RespawnNotice`.
 
-## Teleport flow
+## Economy and social notes
 
-Remote `TS_TeleportRequest(zoneId)` → server checks zone unlocked & pad exists &
-player ready (alive, not mid-death) → moves root part / respawns to pad point, sets zone.
+- All purchases are paid from `bankedTime`; prices come from config tables, never
+  from the client.
+- Bank cap is enforced on deposit and on withdrawal (active time is capped too).
+- `GangService` keeps a single registry document in a DataStore with a debounced
+  save; invites are in-memory (ephemeral) and cleared on leave/disband.
+- `TradeService` sessions expire after `SocialConfig.Trade.SessionSeconds`; a
+  sweeper closes stale sessions with a reason.
+- `LeaderboardService` uses one OrderedDataStore per board
+  (`<StoreName>_<board>`) and falls back to an in-memory sort when DataStore is
+  unavailable (Studio).
 
-## Networking conventions
+## Persistence
 
-- One `Remotes` module creates all remotes at boot with names `TS_*`.
-- Requests → RemoteFunction or UnreliableEvent; results → RemoteEvent.
-- All requests routed through `RateLimiter` with per-action tokens.
-
-## Persistence (ProfileService)
-
-- DataStore wrapped behind an interface; schema-versioned, default profile,
-  migration LUT, retry+backoff, session lock (equivalent in-session memory lock),
-  save queue with debounce + BindToClose flush.
-- Profile shape validated on load (types, string lengths, number ranges, table sizes).
-- Never save Instance refs. Never accept client tables into the profile.
-
-## Studio / served testing
-
-- `rojo build` → `game.rbxl` (static test) or `rojo serve` (live).
-- Drone QA per `docs/testing-checklist.md`.
+- DataStore behind `ProfileService`: schema version + migration, sanitise on load,
+  10s autosave of dirty profiles, `BindToClose` flush.
+- Session lock is an in-process memory lock; profile tables are never exposed to
+  clients except through `ProfileSchema.Snapshot`.
+- Never save Instance references. Never merge a client table into a profile.
 
 ## Failure policy
 
-Any service throw at boot is logged and visible in Studio Output; bootstrap marks
-the service failed rather than silently continuing with broken state.
+Any service throw at boot is caught, logged, and visible in Output; the rest of
+boot continues so one broken system does not hide the others. `rojo build` and
+`luau-compile --null src` must both exit 0 before a change is considered done.

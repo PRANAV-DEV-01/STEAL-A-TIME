@@ -24,8 +24,7 @@ local function getOrCreateCooldowns(userId: number)
 end
 
 local function checkHourlyCap(player: Player, amount: number)
-	local now = os.clock()
-	local hourSlot = math.floor(now / 3600)
+	local hourSlot = math.floor(os.time() / 3600)
 	local entry = session[player.UserId]
 	if not entry or entry.hourSlot ~= hourSlot then
 		entry = { hourSlot = hourSlot, total = 0 }
@@ -39,7 +38,7 @@ local function checkHourlyCap(player: Player, amount: number)
 end
 
 local function npcPowerMultiplier(player: Player)
-	local profile = ctxData.services.ProfileService.GetProfile(player)
+	local profile = ctxData.Services.ProfileService.GetProfile(player)
 	if not profile then
 		return 1
 	end
@@ -53,7 +52,7 @@ local function npcPowerMultiplier(player: Player)
 end
 
 local function petStealMultiplier(player: Player)
-	local profile = ctxData.services.ProfileService.GetProfile(player)
+	local profile = ctxData.Services.ProfileService.GetProfile(player)
 	if not profile then
 		return 0
 	end
@@ -67,13 +66,21 @@ local function petStealMultiplier(player: Player)
 	return math.min(bonus, ctxData.Config.Balance.MaxPetBonus)
 end
 
+local function prestigeMultiplier(player: Player)
+	local service = ctxData.Services.PrestigeService
+	if service and service.GetStealBonus then
+		return 1 + service.GetStealBonus(player)
+	end
+	return 1
+end
+
 local function tryNpcSteal(player: Player, pillarId: string, targetKey: string)
-	local pillar = ctxData.services.NpcTimeSource.GetPillar(pillarId)
+	local pillar = ctxData.Services.NpcTimeSourceService.GetPillar(pillarId)
 	if not pillar then
 		return nil, "no_source"
 	end
 
-	local playerZone = ctxData.services.ZoneService.GetPlayerZone(player)
+	local playerZone = ctxData.Services.ZoneService.GetPlayerZone(player)
 	if not playerZone or playerZone.isHub then
 		return nil, "hub"
 	end
@@ -91,17 +98,17 @@ local function tryNpcSteal(player: Player, pillarId: string, targetKey: string)
 		return nil, "too_far"
 	end
 
-	local profile = ctxData.services.ProfileService.GetProfile(player)
+	local profile = ctxData.Services.ProfileService.GetProfile(player)
 	if not profile then
 		return nil, "no_profile"
 	end
 
-	local activeTime = ctxData.services.TimeService.GetTime(player)
+	local activeTime = ctxData.Services.TimeService.GetTime(player)
 	if activeTime < playerZone.minActiveToSteal then
 		return nil, "low_time"
 	end
 
-	if not ctxData.services.NpcTimeSource.HasTime(pillarId) then
+	if not ctxData.Services.NpcTimeSourceService.HasTime(pillarId) then
 		return nil, "empty"
 	end
 
@@ -111,11 +118,14 @@ local function tryNpcSteal(player: Player, pillarId: string, targetKey: string)
 		return nil, "cooldown"
 	end
 
-	local powerMult = npcPowerMultiplier(player)
-	local petBonus = petStealMultiplier(player)
+	local eventMult = 1
+	if ctxData.Services.EventService then
+		eventMult = ctxData.Services.EventService.GetNpcMultiplier(playerZone.id)
+	end
+
 	local multiplier = math.min(
 		ctxData.Config.Game.MaxComboMultiplier,
-		powerMult * (1 + petBonus)
+		npcPowerMultiplier(player) * (1 + petStealMultiplier(player)) * prestigeMultiplier(player) * eventMult
 	)
 
 	local rawReward = playerZone.baseReward * multiplier
@@ -123,24 +133,32 @@ local function tryNpcSteal(player: Player, pillarId: string, targetKey: string)
 		rawReward,
 		ctxData.Config.Balance.MaximumStolenTimePerStealNPC
 	)
-	local taken = ctxData.services.NpcTimeSource.Take(pillarId, desired)
+	local taken = ctxData.Services.NpcTimeSourceService.Take(pillarId, desired)
 	if taken <= 0 then
 		return nil, "empty"
 	end
 
 	if not checkHourlyCap(player, taken) then
-		ctxData.services.NpcTimeSource.Take(pillarId, -taken)
+		ctxData.Services.NpcTimeSourceService.Refund(pillarId, taken)
 		return nil, "cap"
 	end
 
 	cooldownTable[targetKey] = now + playerZone.stealCooldown
 
-	ctxData.services.TimeService.AwardTime(player, taken)
+	ctxData.Services.TimeService.AwardTime(player, taken)
 	profile.totalTimeStolen = (profile.totalTimeStolen or 0) + taken
 	profile.stats.steals = (profile.stats.steals or 0) + 1
-	ctxData.services.ProfileService.SetDirty(player)
+	ctxData.Services.ProfileService.SetDirty(player)
+	if ctxData.Services.LeaderboardService then
+		ctxData.Services.LeaderboardService.Submit("totalTimeStolen", player, profile.totalTimeStolen)
+	end
 
-	return taken, nil
+	local tutorial = ctxData.Services.TutorialService
+	if tutorial and tutorial.Notify then
+		tutorial.Notify(player, "steal_success")
+	end
+
+	return math.floor(taken), nil
 end
 
 local function tryPvPSteal(player: Player, victimUserId: string, targetKey: string)
@@ -149,16 +167,16 @@ local function tryPvPSteal(player: Player, victimUserId: string, targetKey: stri
 		return nil, "no_target"
 	end
 
-	if ctxData.state.processingDeath[victim.UserId] or ctxData.services.TimeDeathService.IsProcessing(victim) then
+	if ctxData.state.processingDeath[victim.UserId] or ctxData.Services.TimeDeathService.IsProcessing(victim) then
 		return nil, "target_busy"
 	end
 
-	if ctxData.services.TimeService.IsProtected(victim) then
+	if ctxData.Services.TimeService.IsProtected(victim) then
 		return nil, "target_protected"
 	end
 
-	local playerZone = ctxData.services.ZoneService.GetPlayerZone(player)
-	local victimZone = ctxData.services.ZoneService.GetPlayerZone(victim)
+	local playerZone = ctxData.Services.ZoneService.GetPlayerZone(player)
+	local victimZone = ctxData.Services.ZoneService.GetPlayerZone(victim)
 	if not playerZone or playerZone.isHub or playerZone.id ~= (victimZone and victimZone.id) then
 		return nil, "zone"
 	end
@@ -174,17 +192,17 @@ local function tryPvPSteal(player: Player, victimUserId: string, targetKey: stri
 		return nil, "too_far"
 	end
 
-	local profile = ctxData.services.ProfileService.GetProfile(player)
+	local profile = ctxData.Services.ProfileService.GetProfile(player)
 	if not profile then
 		return nil, "no_profile"
 	end
 
-	local activeTime = ctxData.services.TimeService.GetTime(player)
+	local activeTime = ctxData.Services.TimeService.GetTime(player)
 	if activeTime < playerZone.minActiveToSteal then
 		return nil, "low_time"
 	end
 
-	local victimActive = ctxData.services.TimeService.GetTime(victim)
+	local victimActive = ctxData.Services.TimeService.GetTime(victim)
 	if victimActive <= 0 then
 		return nil, "target_empty"
 	end
@@ -195,71 +213,84 @@ local function tryPvPSteal(player: Player, victimUserId: string, targetKey: stri
 		return nil, "cooldown"
 	end
 
+	local eventMult = 1
+	if ctxData.Services.EventService then
+		eventMult = ctxData.Services.EventService.GetPvpMultiplier()
+	end
+
 	local reward = math.min(
-		victimActive * ctxData.Config.Balance.PvPStealFraction,
+		victimActive * ctxData.Config.Balance.PvPStealFraction * prestigeMultiplier(player) * eventMult,
 		ctxData.Config.Balance.MaximumStolenTimePerStealPvP
 	)
+	reward = math.floor(reward)
+	if reward <= 0 then
+		return nil, "target_empty"
+	end
 	if not checkHourlyCap(player, reward) then
 		return nil, "cap"
 	end
 
 	cooldownTable[targetKey] = now + playerZone.stealCooldown
 
-	ctxData.services.TimeService.SetTime(victim, victimActive - reward)
-	ctxData.services.TimeService.AwardTime(player, reward)
+	ctxData.Services.TimeService.SetTime(victim, victimActive - reward)
+	ctxData.Services.TimeService.AwardTime(player, reward)
 
 	profile.totalTimeStolen = (profile.totalTimeStolen or 0) + reward
 	profile.stats.steals = (profile.stats.steals or 0) + 1
-	ctxData.services.ProfileService.SetDirty(player)
+	ctxData.Services.ProfileService.SetDirty(player)
+	if ctxData.Services.LeaderboardService then
+		ctxData.Services.LeaderboardService.Submit("totalTimeStolen", player, profile.totalTimeStolen)
+	end
 
 	local victimWarn = ctxData.Remotes.Get("TS_VictimWarn")
 	victimWarn:FireClient(victim, { amount = reward })
-	ctxData.services.TimeService.Protect(victim, 12)
+	ctxData.Services.TimeService.Protect(victim, 12)
+
+	local tutorial = ctxData.Services.TutorialService
+	if tutorial and tutorial.Notify then
+		tutorial.Notify(player, "steal_success")
+	end
 
 	return reward, nil
 end
 
+local function processSteal(player: Player, targetKey: string)
+	if ctxData.state.processingDeath[player.UserId] or ctxData.Services.TimeDeathService.IsProcessing(player) then
+		return nil, "busy"
+	end
+
+	if string.sub(targetKey, 1, 4) == "npc:" then
+		local pillarId = string.sub(targetKey, 5)
+		return tryNpcSteal(player, pillarId, targetKey)
+	elseif string.sub(targetKey, 1, 7) == "player:" then
+		local userIdStr = string.sub(targetKey, 8)
+		return tryPvPSteal(player, userIdStr, targetKey)
+	end
+	return nil, "invalid"
+end
+
 local function handleStealRequest(player: Player, targetKey: any)
-	if not ctxData.services.RateLimiter.Allow(player, "steal") then
-		ctxData.services.RateLimiter.Suspect(player, "steal")
-		local resultRemote = ctxData.Remotes.Get("TS_StealResult")
+	local resultRemote = ctxData.Remotes.Get("TS_StealResult")
+	if not ctxData.Services.RateLimiter.Allow(player, "steal") then
+		ctxData.Services.RateLimiter.Suspect(player, "steal")
 		resultRemote:FireClient(player, { ok = false, amount = 0, reason = "rate" })
 		return
 	end
 
 	if type(targetKey) ~= "string" or #targetKey > 128 then
-		ctxData.services.RateLimiter.Suspect(player, "steal")
-		local resultRemote = ctxData.Remotes.Get("TS_StealResult")
+		ctxData.Services.RateLimiter.Suspect(player, "steal")
 		resultRemote:FireClient(player, { ok = false, amount = 0, reason = "invalid" })
 		return
 	end
 
-	if ctxData.state.processingDeath[player.UserId] or ctxData.services.TimeDeathService.IsProcessing(player) then
-		local resultRemote = ctxData.Remotes.Get("TS_StealResult")
-		resultRemote:FireClient(player, { ok = false, amount = 0, reason = "busy" })
-		return
-	end
+	local amount, reason = processSteal(player, targetKey)
 
-	local amount, reason
-	if string.sub(targetKey, 1, 4) == "npc:" then
-		local pillarId = string.sub(targetKey, 5)
-		amount, reason = tryNpcSteal(player, pillarId, targetKey)
-	elseif string.sub(targetKey, 1, 7) == "player:" then
-		local userIdStr = string.sub(targetKey, 8)
-		amount, reason = tryPvPSteal(player, userIdStr, targetKey)
-	else
-		amount, reason = nil, "invalid"
-	end
-
-	local resultRemote = ctxData.Remotes.Get("TS_StealResult")
 	if amount then
 		resultRemote:FireClient(player, { ok = true, amount = amount, reason = "ok" })
-		local feedback = ctxData.Remotes.Get("TS_Feedback")
-		feedback:FireClient(player, { text = "+" .. tostring(amount) .. "s", kind = "steal" })
+		ctxData.Remotes.Get("TS_Feedback"):FireClient(player, { text = "+" .. tostring(amount) .. "s", kind = "steal" })
 	else
 		resultRemote:FireClient(player, { ok = false, amount = 0, reason = reason })
-		local feedback = ctxData.Remotes.Get("TS_Feedback")
-		feedback:FireClient(player, { text = "Steal failed: " .. tostring(reason), kind = "error" })
+		ctxData.Remotes.Get("TS_Feedback"):FireClient(player, { text = "Steal failed: " .. tostring(reason), kind = "error" })
 	end
 end
 
@@ -274,6 +305,11 @@ function StealService.Start(ctx)
 	end)
 
 	return true
+end
+
+function StealService.TrySteal(player: Player, targetKey: string)
+	local amount, reason = processSteal(player, targetKey)
+	return amount, reason
 end
 
 return StealService

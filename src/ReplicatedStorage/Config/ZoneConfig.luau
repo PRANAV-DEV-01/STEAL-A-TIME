@@ -11,7 +11,7 @@ local Hub = {
 	maxStealDistance = 0,
 	minActiveToSteal = 0,
 	recommended = "None",
-	padSpawn = Vector3.new(0, 8, 150),
+	padSpawn = Vector3.new(0, 4, 150),
 }
 
 local NpcVillage = {
@@ -27,7 +27,7 @@ local NpcVillage = {
 	maxStealDistance = 22,
 	minActiveToSteal = 10,
 	recommended = "Starting zone",
-	padSpawn = Vector3.new(-800, 8, -800),
+	padSpawn = Vector3.new(-800, 4, -800),
 }
 
 local PlayerCity = {
@@ -43,7 +43,7 @@ local PlayerCity = {
 	maxStealDistance = 30,
 	minActiveToSteal = 10,
 	recommended = "Speed I + Power I",
-	padSpawn = Vector3.new(900, 8, -900),
+	padSpawn = Vector3.new(900, 4, -900),
 }
 
 local TimeVaults = {
@@ -59,7 +59,7 @@ local TimeVaults = {
 	maxStealDistance = 26,
 	minActiveToSteal = 15,
 	recommended = "Power III + Stealth I",
-	padSpawn = Vector3.new(-950, 8, 1050),
+	padSpawn = Vector3.new(-950, 4, 1050),
 }
 
 local SecretAreas = {
@@ -75,7 +75,23 @@ local SecretAreas = {
 	maxStealDistance = 24,
 	minActiveToSteal = 5,
 	recommended = "Discovery required",
-	padSpawn = Vector3.new(300, 260, 400),
+	padSpawn = Vector3.new(300, 254, 400),
+}
+
+local Training = {
+	id = "training",
+	name = "Training Grounds",
+	center = Vector3.new(0, 0, -380),
+	halfExtents = Vector3.new(70, 80, 70),
+	dangerLevel = 0,
+	decayPerSecond = 0,
+	isHub = false,
+	baseReward = 3,
+	stealCooldown = 3,
+	maxStealDistance = 20,
+	minActiveToSteal = 0,
+	recommended = "Practice here — no decay",
+	padSpawn = Vector3.new(0, 4, -380),
 }
 
 local ZoneConfig = {
@@ -85,6 +101,7 @@ local ZoneConfig = {
 		PlayerCity = PlayerCity,
 		TimeVaults = TimeVaults,
 		SecretAreas = SecretAreas,
+		Training = Training,
 	},
 
 	Pads = {
@@ -112,19 +129,39 @@ local ZoneConfig = {
 			position = Vector3.new(70, 1, 250),
 			color = Color3.fromRGB(130, 255, 120),
 		},
+		{
+			zone = "training",
+			label = "Training",
+			position = Vector3.new(-70, 1, 245),
+			color = Color3.fromRGB(255, 210, 90),
+		},
+	},
+
+	-- Hub facilities. `action` is handled by the client PadInteraction module.
+	Interactables = {
+		{ action = "bank", label = "TIME BANK", position = Vector3.new(-100, 1, 40), color = Color3.fromRGB(80, 220, 160) },
+		{ action = "shop", label = "UPGRADE SHOP", position = Vector3.new(100, 1, 40), color = Color3.fromRGB(255, 200, 80) },
+		{ action = "daily", label = "DAILY REWARD", position = Vector3.new(-100, 1, -40), color = Color3.fromRGB(255, 120, 200) },
+		{ action = "leaderboard", label = "LEADERBOARD", position = Vector3.new(100, 1, -40), color = Color3.fromRGB(120, 200, 255) },
+		{ action = "prestige", label = "PRESTIGE", position = Vector3.new(-160, 1, 0), color = Color3.fromRGB(255, 90, 90) },
+		{ action = "gang", label = "GANGS", position = Vector3.new(160, 1, 0), color = Color3.fromRGB(180, 120, 255) },
+		{ action = "trade", label = "TRADE", position = Vector3.new(0, 1, 100), color = Color3.fromRGB(130, 255, 120) },
+		{ action = "event", label = "EVENTS", position = Vector3.new(0, 1, 60), color = Color3.fromRGB(255, 160, 60) },
+		{ action = "tutorial", label = "TUTORIAL", position = Vector3.new(0, 1, -100), color = Color3.fromRGB(160, 220, 255) },
+		{ action = "settings", label = "SETTINGS", position = Vector3.new(0, 1, -140), color = Color3.fromRGB(200, 200, 200) },
 	},
 
 	HubSpawnPoints = {
-		Vector3.new(0, 8, 0),
-		Vector3.new(25, 8, 10),
-		Vector3.new(-25, 8, 10),
-		Vector3.new(12, 8, -25),
-		Vector3.new(-12, 8, -25),
-		Vector3.new(30, 8, -10),
-		Vector3.new(-30, 8, -10),
-		Vector3.new(0, 8, 30),
-		Vector3.new(40, 8, 20),
-		Vector3.new(-40, 8, 20),
+		Vector3.new(0, 4, 0),
+		Vector3.new(25, 4, 10),
+		Vector3.new(-25, 4, 10),
+		Vector3.new(12, 4, -25),
+		Vector3.new(-12, 4, -25),
+		Vector3.new(30, 4, -10),
+		Vector3.new(-30, 4, -10),
+		Vector3.new(0, 4, 30),
+		Vector3.new(40, 4, 20),
+		Vector3.new(-40, 4, 20),
 	},
 
 	NpcPillars = {
@@ -155,6 +192,101 @@ local ZoneConfig = {
 			position = Vector3.new(-820, 12, -830),
 			pool = 40,
 			respawnTime = 30,
+		},
+
+		{
+			id = "NPC_CitySiphon01",
+			zone = "player_city",
+			position = Vector3.new(860, 12, -860),
+			pool = 55,
+			respawnTime = 40,
+		},
+		{
+			id = "NPC_CitySiphon02",
+			zone = "player_city",
+			position = Vector3.new(940, 12, -860),
+			pool = 55,
+			respawnTime = 40,
+		},
+		{
+			id = "NPC_CitySiphon03",
+			zone = "player_city",
+			position = Vector3.new(860, 12, -940),
+			pool = 55,
+			respawnTime = 40,
+		},
+		{
+			id = "NPC_CitySiphon04",
+			zone = "player_city",
+			position = Vector3.new(940, 12, -940),
+			pool = 55,
+			respawnTime = 40,
+		},
+
+		{
+			id = "NPC_VaultGuard01",
+			zone = "time_vaults",
+			position = Vector3.new(-920, 12, 1020),
+			pool = 80,
+			respawnTime = 60,
+		},
+		{
+			id = "NPC_VaultGuard02",
+			zone = "time_vaults",
+			position = Vector3.new(-980, 12, 1020),
+			pool = 80,
+			respawnTime = 60,
+		},
+		{
+			id = "NPC_VaultGuard03",
+			zone = "time_vaults",
+			position = Vector3.new(-920, 12, 1080),
+			pool = 80,
+			respawnTime = 60,
+		},
+		{
+			id = "NPC_VaultGuard04",
+			zone = "time_vaults",
+			position = Vector3.new(-980, 12, 1080),
+			pool = 80,
+			respawnTime = 60,
+		},
+
+		{
+			id = "NPC_LostHour01",
+			zone = "secret",
+			position = Vector3.new(270, 262, 370),
+			pool = 120,
+			respawnTime = 90,
+		},
+		{
+			id = "NPC_LostHour02",
+			zone = "secret",
+			position = Vector3.new(330, 262, 370),
+			pool = 120,
+			respawnTime = 90,
+		},
+		{
+			id = "NPC_LostHour03",
+			zone = "secret",
+			position = Vector3.new(300, 262, 430),
+			pool = 120,
+			respawnTime = 90,
+		},
+
+		{
+			id = "NPC_TrainingDummy01",
+			zone = "training",
+			position = Vector3.new(-18, 12, -380),
+			pool = 999,
+			respawnTime = 5,
+		},
+		{
+			id = "NPC_TrainingDummy02",
+			zone = "training",
+			position = Vector3.new(18, 12, -380),
+			pool = 999,
+			respawnTime = 5,
 		},
 	},
 }

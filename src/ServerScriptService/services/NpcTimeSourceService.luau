@@ -74,6 +74,20 @@ function NpcTimeSourceService.Take(id: string, amount: number)
 	return taken
 end
 
+-- Give time back into a pool (used when a steal is rejected after being taken).
+function NpcTimeSourceService.Refund(id: string, amount: number)
+	local pool = pools[id]
+	if not pool or amount <= 0 then
+		return
+	end
+	pool.current = math.clamp(pool.current + amount, 0, pool.max)
+	if pool.current < pool.max then
+		pool.depletedAt = pool.depletedAt or os.clock()
+	else
+		pool.depletedAt = nil
+	end
+end
+
 function NpcTimeSourceService.CurrentAmount(id: string)
 	local pool = pools[id]
 	if pool then

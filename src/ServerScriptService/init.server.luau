@@ -9,15 +9,20 @@ ctx.Config = {
 	Game = SharedLoader.Get("Config", "GameConfig"),
 	Balance = SharedLoader.Get("Config", "BalanceConfig"),
 	Zones = SharedLoader.Get("Config", "ZoneConfig"),
+	Economy = SharedLoader.Get("Config", "EconomyConfig"),
+	Social = SharedLoader.Get("Config", "SocialConfig"),
 }
 ctx.Remotes = SharedLoader.GetRoot("Remotes")
 ctx.Validation = SharedLoader.GetRoot("Validation")
 ctx.ProfileSchema = SharedLoader.GetRoot("ProfileSchema")
 
 ctx.Services = {}
+-- Backwards-compatible aliases used by existing services.
+ctx.services = ctx.Services
 ctx.State = {
 	processingDeath = {},
 }
+ctx.state = ctx.State
 
 local ServicesFolder = script:WaitForChild("services", 15)
 local WorldFolder = script:WaitForChild("world", 15)
@@ -31,6 +36,19 @@ local ServiceNames = {
 	"TimeDeathService",
 	"StealService",
 	"TeleportService",
+	"BankService",
+	"ShopService",
+	"DailyService",
+	"OfflineService",
+	"PrestigeService",
+	"LeaderboardService",
+	"GangService",
+	"TradeService",
+	"EventService",
+	"TutorialService",
+	"CharacterService",
+	"AntiCheatService",
+	"SettingsService",
 }
 
 for _, name in ServiceNames do
@@ -47,6 +65,19 @@ local StartOrder = {
 	"TimeDeathService",
 	"StealService",
 	"TeleportService",
+	"BankService",
+	"ShopService",
+	"DailyService",
+	"OfflineService",
+	"PrestigeService",
+	"LeaderboardService",
+	"GangService",
+	"TradeService",
+	"EventService",
+	"TutorialService",
+	"CharacterService",
+	"AntiCheatService",
+	"SettingsService",
 	"WorldBuilder",
 }
 
@@ -65,7 +96,10 @@ end
 print(("[%s] bootstrap complete"):format(ctx.Config.Game.LogPrefix))
 
 game:BindToClose(function()
-	if ctx.Services.ProfileService and ctx.Services.ProfileService.Shutdown then
-		pcall(ctx.Services.ProfileService.Shutdown, ctx.Services.ProfileService)
+	for _, name in ipairs({ "ProfileService", "GangService" }) do
+		local service = ctx.Services[name]
+		if service and service.Shutdown then
+			pcall(service.Shutdown, service)
+		end
 	end
 end)

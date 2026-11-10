@@ -72,21 +72,31 @@ local function decayLoop()
 	end
 end
 
+local function beginPlayer(player: Player)
+	task.spawn(function()
+		while not ctxData.services.ProfileService.GetProfile(player) do
+			task.wait(0.1)
+			if not player.Parent then
+				return
+			end
+		end
+		local profile = ctxData.services.ProfileService.GetProfile(player)
+		active[player.UserId] = profile.activeTime
+		lastSyncAt[player.UserId] = 0
+		task.wait(0.5)
+		broadcast(player)
+	end)
+end
+
 function TimeService.Start(ctx)
 	ctxData = ctx
 
-	Players.PlayerAdded:Connect(function(player)
-		task.spawn(function()
-			while not ctxData.services.ProfileService.GetProfile(player) do
-				task.wait(0.1)
-			end
-			local profile = ctxData.services.ProfileService.GetProfile(player)
-			active[player.UserId] = profile.activeTime
-			lastSyncAt[player.UserId] = 0
-			task.wait(0.5)
-			broadcast(player)
-		end)
-	end)
+	Players.PlayerAdded:Connect(beginPlayer)
+
+	-- Studio Play can start with the LocalPlayer already present.
+	for _, player in Players:GetPlayers() do
+		beginPlayer(player)
+	end
 
 	Players.PlayerRemoving:Connect(function(player)
 		active[player.UserId] = nil

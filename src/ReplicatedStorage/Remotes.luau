@@ -2,6 +2,9 @@ local RunService = game:GetService("RunService")
 
 local IS_SERVER = RunService:IsServer()
 local PARENT = script.Parent
+-- NOTE: must not equal the module's own name, or FindFirstChild("Remotes")
+-- can return this ModuleScript instead of the folder.
+local FOLDER_NAME = "RemotesFolder"
 
 local Catalog = {
 	Events = {
@@ -14,41 +17,67 @@ local Catalog = {
 		"TS_RespawnNotice",
 		"TS_SyncProfile",
 		"TS_CooldownSync",
+		"TS_BankUpdate",
+		"TS_DailyUpdate",
+		"TS_LeaderboardUpdate",
+		"TS_GangUpdate",
+		"TS_TradeUpdate",
+		"TS_EventUpdate",
+		"TS_TutorialUpdate",
+		"TS_AbilityState",
 	},
 	UnreliableEvents = {
 		"TS_StealRequest",
 		"TS_TeleportRequest",
 		"TS_BankDeposit",
 		"TS_BankWithdraw",
+		"TS_DashRequest",
+		"TS_StealthRequest",
 	},
 	Functions = {
 		"TS_PurchaseRequest",
 		"TS_ClaimDaily",
 		"TS_ClaimOffline",
+		"TS_PrestigeRequest",
+		"TS_GangAction",
+		"TS_TradeAction",
+		"TS_SettingsAction",
+		"TS_LeaderboardRequest",
+		"TS_TutorialAction",
+		"TS_ProfileRequest",
 	},
 }
 
 local Remotes = {
 	Catalog = Catalog,
 	IS_SERVER = IS_SERVER,
+	FolderName = FOLDER_NAME,
 }
 
 local function resolve(remoteName: string)
-	local folder = PARENT:FindFirstChild("Remotes")
+	local folder = PARENT:FindFirstChild(FOLDER_NAME)
 	if folder then
 		local inst = folder:FindFirstChild(remoteName)
 		if inst then
 			return inst
 		end
 	end
-	return PARENT:WaitForChild("Remotes", 5):WaitForChild(remoteName, 5)
+	local waited = PARENT:WaitForChild(FOLDER_NAME, 5)
+	if not waited then
+		error("[TimeSanctuary] Remotes folder missing: " .. FOLDER_NAME)
+	end
+	local inst = waited:WaitForChild(remoteName, 5)
+	if not inst then
+		error("[TimeSanctuary] Remote missing: " .. remoteName)
+	end
+	return inst
 end
 
 if IS_SERVER then
-	local folder = PARENT:FindFirstChild("Remotes")
+	local folder = PARENT:FindFirstChild(FOLDER_NAME)
 	if not folder then
 		folder = Instance.new("Folder")
-		folder.Name = "Remotes"
+		folder.Name = FOLDER_NAME
 		folder.Parent = PARENT
 	end
 

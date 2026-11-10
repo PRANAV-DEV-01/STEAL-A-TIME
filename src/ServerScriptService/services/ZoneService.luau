@@ -18,6 +18,13 @@ local function characterRoot(player: Player)
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
+local function notifyTutorial(player: Player, eventName: string)
+	local tutorial = ctxData.Services.TutorialService
+	if tutorial and tutorial.Notify then
+		tutorial.Notify(player, eventName)
+	end
+end
+
 function ZoneService.GetPlayerZone(player: Player)
 	local root = characterRoot(player)
 	if not root then
@@ -46,6 +53,10 @@ function ZoneService.OnPlayerProfileReady(player: Player)
 	end
 end
 
+function ZoneService.OnProfileReady(player: Player)
+	ZoneService.OnPlayerProfileReady(player)
+end
+
 function ZoneService.GetRandomHubSpawn()
 	local spawns = ctxData.Config.Zones.HubSpawnPoints
 	local index = math.random(1, #spawns)
@@ -61,6 +72,7 @@ function ZoneService.PlaceAtHub(player: Player)
 	root.CFrame = CFrame.new(spot)
 	root.AssemblyLinearVelocity = Vector3.zero
 	ZoneService.SetPlayerZone(player, ctxData.Config.Zones.Hub.id)
+	notifyTutorial(player, "returned_hub")
 	return true
 end
 
@@ -74,6 +86,11 @@ function ZoneService.PlaceAt(player: Player, position: Vector3)
 	local zone = ctxData.Config.Zones.GetZoneAtPosition(position)
 	if zone then
 		ZoneService.SetPlayerZone(player, zone.id)
+		if not zone.isHub then
+			notifyTutorial(player, "entered_zone")
+		else
+			notifyTutorial(player, "returned_hub")
+		end
 	end
 	return true
 end

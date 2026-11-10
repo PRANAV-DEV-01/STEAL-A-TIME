@@ -4,8 +4,9 @@ A time-stealing multiplayer Roblox simulator. Safely spawn in TIME SANCTUARY,
 then steal active seconds from NPCs and rivals in danger zones, return to the
 hub, bank, upgrade, and repeat.
 
-> **Status:** EARLY DEVELOPMENT — core loop only. See
-> `docs/implementation-progress.md` for exactly what exists vs. what is planned.
+> **Status:** FEATURE-COMPLETE ON PAPER — full expansion implemented and building,
+> but **not yet played in Studio**. See `docs/implementation-progress.md` for what
+> exists vs. what is planned, and `docs/known-issues.md` (KI-005) before testing.
 
 ## Repository layout
 
@@ -42,12 +43,22 @@ Prereqs: Roblox Studio installed.
 
 If this is your first time, follow the walkthrough in `docs/testing-checklist.md`.
 
-## Current features (real)
+## Current features (implemented)
 
-- Rojo build pipeline verified (`game.rbxl` builds from `src/`).
-- Legacy places preserved as Rojo world models under `src/Workspace/`.
-- Server-authoritative foundation modules (Config, Remotes, Validation, Profile).
-- [Progress doc updates as systems land.]
+- Server-authoritative core loop: hub → travel → steal (NPC + PvP) → death
+  pipeline → respawn, all validated server-side.
+- Economy: bank, shop upgrades, pets, bank-capacity tiers, daily rewards,
+  offline earnings, prestige tiers.
+- Social: gangs (create/invite/accept/kick/leave/disband + gang bank), banked-time
+  trades, two leaderboards, weekday world events.
+- Progression/safety: 6-step tutorial, dash/stealth/auto-steal abilities, settings
+  toggles, anti-cheat, rate limiting and suspect escalation.
+- Procedural world (hub, clock towers, travel/facility pads, 6 zones, 17 NPC
+  pillars) built by `WorldBuilder` at boot.
+- Mobile-friendly UI (44px+ targets, pad-interaction and dash buttons) and timer
+  colours: >30 green, ≤30 yellow, ≤15 orange, ≤5 red.
+- Build/static checks: `rojo build` and `luau-compile --null src` both exit 0.
+- ⚠️ Runtime verification is still pending — see `docs/testing-checklist.md`.
 
 ## Design docs
 

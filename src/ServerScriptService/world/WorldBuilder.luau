@@ -86,7 +86,7 @@ local function buildHub()
 		})
 	end
 
-	clockTower("Clock_Tower_Center", Vector3.new(0, 20, 0), 40)
+	clockTower("Clock_Tower_Center", Vector3.new(0, 20, -150), 40)
 	clockTower("Clock_Tower_NW", Vector3.new(-200, 12, -200), 24)
 	clockTower("Clock_Tower_NE", Vector3.new(200, 12, -200), 24)
 	clockTower("Clock_Tower_SW", Vector3.new(-200, 12, 200), 24)
@@ -131,6 +131,36 @@ local function buildHub()
 		label.Text = pad.label
 		label.TextColor3 = pad.color
 		label.TextStrokeTransparency = 0.5
+		label.Font = Enum.Font.GothamBold
+		label.TextScaled = true
+		label.Parent = billboard
+	end
+
+	for _, facility in zones.Interactables do
+		local facilityPart = part({
+			Name = "Pad_" .. facility.action,
+			Size = Vector3.new(7, 1, 7),
+			Position = facility.position + Vector3.new(0, 0.5, 0),
+			Anchored = true,
+			Material = Enum.Material.Neon,
+			Color = facility.color,
+			Parent = hub,
+		})
+		facilityPart:SetAttribute("TSInteract", facility.action)
+
+		local billboard = Instance.new("BillboardGui")
+		billboard.Name = "Popup"
+		billboard.Size = UDim2.new(12, 0, 2, 0)
+		billboard.StudsOffset = Vector3.new(0, 2.5, 0)
+		billboard.AlwaysOnTop = false
+		billboard.Parent = facilityPart
+
+		local label = Instance.new("TextLabel")
+		label.Size = UDim2.new(1, 0, 1, 0)
+		label.BackgroundTransparency = 1
+		label.Text = facility.label
+		label.TextColor3 = facility.color
+		label.TextStrokeTransparency = 0.4
 		label.Font = Enum.Font.GothamBold
 		label.TextScaled = true
 		label.Parent = billboard
@@ -215,10 +245,11 @@ local function buildZones()
 			continue
 		end
 
+		local baseY = zone.center.Y + 8
 		local pillar = cylinder({
 			Name = "Pillar_" .. pillarDef.id,
 			Size = Vector3.new(12, 5, 5),
-			Position = pillarDef.position + Vector3.new(0, 6, 0),
+			Position = Vector3.new(pillarDef.position.X, baseY, pillarDef.position.Z),
 			Orientation = Vector3.new(0, 0, 90),
 			Anchored = true,
 			Material = Enum.Material.Neon,
@@ -230,7 +261,7 @@ local function buildZones()
 		sphere({
 			Name = "Pillar_Orb",
 			Size = Vector3.new(4, 4, 4),
-			Position = pillarDef.position + Vector3.new(0, 14, 0),
+			Position = Vector3.new(pillarDef.position.X, baseY + 8, pillarDef.position.Z),
 			Anchored = true,
 			Material = Enum.Material.Neon,
 			Color = Color3.fromRGB(255, 240, 150),
@@ -258,7 +289,7 @@ local function freezeLegacy()
 
 	for _, spawnLocation in ctxData.world:GetDescendants() do
 		if spawnLocation:IsA("SpawnLocation") then
-			spawnLocation.CFrame = CFrame.new(0, 8, 0)
+			spawnLocation.CFrame = CFrame.new(0, 4, 0)
 			spawnLocation.Enabled = true
 			spawnLocation.Neutral = true
 		end

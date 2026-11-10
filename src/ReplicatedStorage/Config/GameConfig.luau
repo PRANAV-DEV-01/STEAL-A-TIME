@@ -3,7 +3,7 @@ local GameConfig = {
 	HubName = "TIME SANCTUARY",
 	FolderName = "TimeSanctuary",
 	WorldFolderName = "TimeSanctuary_World",
-	RemotesFolderName = "Remotes",
+	RemotesFolderName = "RemotesFolder",
 
 	BaseWalkSpeed = 16,
 	MaxWalkSpeed = 24,
